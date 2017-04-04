@@ -1,136 +1,140 @@
-# Mission 1: Publishing a NodeJS bot to Azure
+# Mission 1: Connecting to a bot
+We just found an alien bot on Mars. There's a problem though. The bot has it's own special set of parameters and communication methods.
+As a result, we need to craft a class which will help us in connecting to the bot. We need to establish the right functions in our new class for use in our application later.
 
-## Introuction
+## Introduction
+In this mission, we will be connecting to the bot. Bots built using the Microsoft Bot Framework have a Direct Line channel.
+This channel is essentially a REST API that allows us to interact with the bot using HTTP requests and responses.
 
-In this mission, we will deploy a bot that uses NodeJS and the Microsoft Bot Framework to Azure. 
-This simple bot has already been built for you and you can find the project files above under "marsbot".
+Although it is possible to setup your own classes and models for accessing the REST API, it can be troublesome. Luckily, there is a Nuget package published by Microsoft
+for use with .NET projects which helps us abstract the REST API calls. The Nuget has already been installed for you in this project.
 
-There are 3 steps to this tutorial:
+## Connecting the bot
+Our application needs to communicate with the bot in 2 ways: Sending and receiving messages. As a result, we will need to use methods to send messages to the bot as well as constantly receive messages from the bot.
 
-1. Publishing the bot to Github
-2. Deploying to Azure using CI from Github
-3. Registering the bot on the Bot Framework portal 
+The DirectLine nuget we installed will allow us to more easily implement this within our application without having to write any HTTP calls manually. Let's make a new class where we will contain and abstract all the connection-related code.
 
-## Prerequisites
+Right click on the main project and go to Add > New Item > Class and name it `BotConnection.cs`.
 
-- Install git - https://git-scm.com/downloads
-- Make a Microsoft account if you don't have one
-- Make a Github account if you don't have one
-
-## Downloading the project
-
-First, go to this [repository](https://github.com/jamesleeht/marsbot) and download the ZIP file. 
-Make sure to unarchive it and store it somewhere like your Desktop.
-
-## Initialise a Github repository
-
-A Github repository is a great way to store your code online and collaborate with others on a codebase. You can plug your repository in to a hosted web app and each time you make changes to the repository, the changes automatically deploy onto your web app (this is called Continuous Integration). Log in to [Github](http://github.com). Click on the + sign at the top right hand corner, and then click on New Repository. Name and create your repository. Once that's created, click on the Code tab of your repository. Click on the green "Clone or download" button, then copy the url (it should end with .git). 
-
-Next, open your command prompt.
-
-Navigate to the folder with the project. If your project is on the desktop, the command would be like this:
-
-```shell
-cd Desktop/marsbot
+### Imports
+We need to import the relevant namespace from the DirectLine nuget package in order to use its classes and methods.
+```cs
+using Microsoft.Bot.Connector.DirectLine;
 ```
 
-Now, we need to make the current folder containing your bot a Git repository. Use this command:
+### Fields
+Let's define a few new variables in our new blank class.
 
-```shell
-git init
-```
-
-We now need to link our local Git folder to the remote Github repository. Type in the following command:
-
-```shell
-git remote add origin https://github.com/yourusername/yourrepositoryname.git
-```
-
-Make sure you use the url you copied earlier in the above command. Your local Git repository is now remotely tracking your Github repository online. Type `git remote -v` to check that it points to the correct url.
-
-Once that's done, let's commit and push our code to the Github repo. Run the following commands (separately):
-
-```shell
-git add .
-git commit -m "Initial commit"
-git push origin master
-```
-
-If you refresh your Github repository online, you should see that your code has been pushed to it. Now let's use continuous integration to deploy the code in our Github repo into a web app hosted online. 
-
-## Set the start command
-
-In your package.json file (if you're using nodejs), we need to update the start script. Update your package.json file to the following:
-
-```js
+```cs
+class BotConnection
 {
-    ...
-    "main": "app.js",
-    "scripts": {
-        "start": "node app.js" // tells the web service where the start script is
-    }
-    ...
+    public DirectLineClient Client = new DirectLineClient("Place key here");
+    public Conversation MainConversation;
+    public ChannelAccount Account;
 }
 ```
 
-This step is very important - your bot service may not work if you do not do this.
+#### Use this key for direct line: "Z1manpIsazM.cwA.6e4.w3TbL5dPeJKMTivS4iEl_ByEwr760KESaTQ7ftSX2T8"
 
-## Publish the bot online
+First, we create a new `DirectLineClient` object using a DirectLine key (taken from the bot's portal in Mission 1).
 
-We have to publish the bot online as the Bot Framework won't be able to talk to a local url. 
+Then, there are another 2 variables for storing the current conversation as well as the user's account, which we will define later.
 
-Go to the [Azure Portal](https://portal.azure.com). Click on 'New' (it's at the sidebar), go into the web + mobile tab, and click on Web App. Name your web app whatever you'd like, name your resource group something sensible. Your Subscription should be free, and the location your app is hosted on can be anywhere, but it might be good to set it to a region close to you. Go ahead and create your web app.
+### Constructor
+We will be using the constructor of this class to initialize the `MainConversation` and `Account` fields. These fields will store the information about the current conversation and user.
 
-It might take a while, but you will get notified when your web app has been successfully created. Once it has been created go into All Resources (it's on the sidebar) and look for the web app you just created. Click into it and it should display a dashboard with info about your web app. Click into the Github blade under Choose Source. Then, click into Authorization and log in with your Github credentials. Then, select the project and branch (should be master) that your bot is in. Leave the Performance Test as not configured and hit ok. 
+```cs
+class BotConnection
+{
+    public BotConnection(string accountName)
+    {
+        MainConversation = Client.Conversations.StartConversation();
+        Account = new ChannelAccount { Id = accountName, Name = accountName };
+    }
+}
+```
+In this constructor, we can take in a parameter with the user's name to create an account object. We will also start a new conversation using the client.
 
-![CI](https://raw.githubusercontent.com/jamesleeht/XamarinMarsHOL/master/Images/cintegration.PNG)
+### Message sending method
+Next, we need to craft a method that allows us to send messages to the bot.
 
-It may take a while for the latest commit to sync and be deployed to your web app. If the latest commit doesn't seem to be syncing, just hit sync. You'll see a green tick with your latest commit once it's done. 
+```cs
+public void SendMessage(string message)
+{
+    Activity activity = new Activity
+    {
+        From = Account,
+        Text = message,
+        Type = ActivityTypes.Message
+    };
+    Client.Conversations.PostActivity(MainConversation.ConversationId, activity);
+}
+```
+This method will take in a parameter with a simple text message
+and use that to create an `Activity` that will be sent to the conversation we initialized.
 
-![CISuccess](https://raw.githubusercontent.com/jamesleeht/XamarinMarsHOL/master/Images/cintsuccess.PNG)
+### Message receiving method
+#### MessageListItem Class
+We will need to create a class that will be used to store the messages in an `ObservableCollection`.
 
-## Registering your bot on the portal
-In order for your bot to talk to the Bot Connector and reach your users on the different channels, the bot has to be first registered on the Bot Framework portal. 
+This class will later be used for data binding in the UI.
 
-First, go to this link on your browser: https://dev.botframework.com/bots/new
+Right click on the main project and go to Add > New Item > Class and name it MessageListItem.cs.
 
-You will be prompted to sign in with your Microsoft account. Take note to use a personal Microsoft account (usually Hotmail, Outlook, MSN, Live email addresses) and not your school or organization's Office365 account.
+Change the class to look like this:
 
-After signing in, you will be greeted with a simple form that allows you to register your bot. 
+```cs
+class MessageListItem
+{
+    public string Text { get; set; }
+    public string Sender { get; set; }
 
-#### Make sure your bot's name is "MarsBot".
+    public MessageListItem(string text, string sender)
+    {
+        Text = text;
+        Sender = sender;
+    }
+}
+```
 
-Most of the fields are self-explanatory. 
-- The "Messaging Endpoint" field should be filled with the domain given to you on your Azure Web App, but subdomain to /api/messages.
-- The "Create Microsoft App ID and Password" will give you a new ID and password. Save this as we need it later.
-- You can also input your Azure Application Insights key if you enabled it when creating the Web App on Azure, but it's optional.
+#### Method implementation
+Lastly, we need to have a method that continuously checks the conversation on the server for new messages from the bot.
 
-![Registration](https://raw.githubusercontent.com/jamesleeht/XamarinMarsHOL/master/Images/marsbotregistration.PNG)
+```cs
+public async Task GetMessagesAsync(ObservableCollection<MessageListItem> collection)
+{
+    string watermark = null;
 
-## Authorizing your bot
-Now that you have the bot deployed on Azure and registered on the Bot Framework, we need to add the App ID and Password on Azure.
+    //Loop retrieval
+    while(true)
+    {
+        Debug.WriteLine("Reading message every 3 seconds");
+        
+        //Get activities (messages) after the watermark
+        var activitySet = await Client.Conversations.GetActivitiesAsync(MainConversation.ConversationId, watermark);
 
-Go back to your deployment on Azure and click on App Settings, configuring the App ID and Password we got just now.
+        //Set new watermark
+        watermark = activitySet?.Watermark;
 
-![AppSettings](https://raw.githubusercontent.com/jamesleeht/XamarinMarsHOL/master/Images/marsbotsettings.PNG)
+        //Loop through the activities and add them to the list
+        foreach(Activity activity in activitySet.Activities)
+        {
+            if (activity.From.Name == "MarsBot")
+            {
+                collection.Add(new MessageListItem(activity.Text, activity.From.Name));
+            }             
+        }
 
-## Managing your new bot
-After registering, you'll be sent to the page where you can manage all your bots. Click on the bot you just created. The page should look like this:
+        //Wait 3 seconds
+        await Task.Delay(3000);
+    }
+}
+```
 
-![Management](https://raw.githubusercontent.com/jamesleeht/XamarinMarsHOL/master/Images/marsbotportal.PNG)
+This method takes in an `ObservableCollection` typed parameter. 
+This collection will later be binded to the UI in Xamarin, so we will need to push any new messages into this collection.
 
-The top portion has several useful functions.
-- A testing function which will send a simple HTTP request to your messaging endpoint and give you back an appropriate success or error message.
-- The Web Chat (iframe) channel that has been pre-embedded for you on the page, allowing you to talk to your bot from the portal
+In this method, it checks for new messages every 3 seconds, establishing a watermark every iteration to ensure that we do not retrieve old messages.
+Whenever we retrieve a new message, we create a new `MessageListItem` from it and push it into the collection.
 
-Try writing "Hi" to the bot in the web chat and see if it responds. If it does then we have successfully deployed the bot.
-
-## Setting up Direct Line
-
-![DirectLine](https://raw.githubusercontent.com/jamesleeht/XamarinMarsHOL/master/Images/marsbotdl.PNG)
-
-Go down to the Direct Line row and click "Add" on the right. Click "Add new site" on the left and add a new site.
-You will be given 2 keys, copy the first key and save it somewhere, we will need this key later.
-
-## Finish Line
-Now we will have a bot deployed on Azure and a DirectLine key which will allow us to proceed with Mission 2.
+In the next mission, we will look into utilizing the class we crafted here. 
